@@ -68,12 +68,12 @@ def set_auth_cookie(response, token):
     """
     Устанавливает JWT токен в HTTP-only cookie
     """
-    is_production = os.environ.get('FLASK_ENV') != 'development'
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
+    # Всегда используем secure=false для единообразия между локальной и продакшен средой
     cookie_params = {
         'httponly': True,
-        'secure': is_production,
+        'secure': False,
         'samesite': 'Lax',
         'max_age': JWT_EXPIRATION_HOURS * 3600
     }
@@ -89,12 +89,12 @@ def clear_auth_cookie(response):
     """
     Удаляет JWT токен из cookie
     """
-    is_production = os.environ.get('FLASK_ENV') != 'development'
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
+    # Всегда используем secure=false для единообразия между локальной и продакшен средой
     cookie_params = {
         'httponly': True,
-        'secure': is_production,
+        'secure': False,
         'samesite': 'Lax',
         'max_age': 0
     }
