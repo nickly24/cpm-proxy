@@ -4,10 +4,10 @@
 import os
 
 # URL основного сервера (cpm-serv)
-MAIN_SERVER_URL = os.environ.get('MAIN_SERVER_URL', 'http://192.168.1.11:80')
+MAIN_SERVER_URL = os.environ.get('MAIN_SERVER_URL', 'https://nickly24-cpm-serv-d4e2.twc1.net/')
 
 # URL экзам сервера (cpm-exam-main)
-EXAM_SERVER_URL = os.environ.get('EXAM_SERVER_URL', 'http://192.168.1.11:81')
+EXAM_SERVER_URL = os.environ.get('EXAM_SERVER_URL', 'https://nickly24-cpm-exam-main-d9cb.twc1.net')
 
 # Секретный ключ для JWT (должен совпадать с ключами на обоих серверах)
 JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'dev-secret-key-cpm-lms-2025-change-in-production')
