@@ -48,6 +48,11 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
         'Content-Type': 'application/json'
     }
     
+    # Добавляем Authorization заголовок, если он есть в исходном запросе
+    auth_header = request.headers.get('Authorization')
+    if auth_header:
+        request_headers['Authorization'] = auth_header
+    
     if headers:
         request_headers.update(headers)
     
