@@ -198,17 +198,15 @@ def proxy_auth():
     except:
         return jsonify({"status": False, "error": "Ошибка при авторизации"}), 500
     
-    # Если авторизация успешна, токен уже должен быть в Set-Cookie от основного сервера
-    # Но мы создаём свой ответ, чтобы контролировать domain cookie
+    # Если авторизация успешна, создаём токен и возвращаем его в JSON
     if response_data.get('status') and response_data.get('user'):
         # Создаём токен на прокси-сервере (используя те же данные)
         token = generate_token(response_data['user'])
         
-        # Создаём ответ с cookie
-        flask_response = make_response(jsonify(response_data))
-        flask_response = set_auth_cookie(flask_response, token)
+        # Добавляем токен в ответ
+        response_data['token'] = token
         
-        return flask_response
+        return jsonify(response_data)
     
     # Если авторизация неуспешна, просто возвращаем ответ как есть
     return create_proxy_response(response)
@@ -217,19 +215,12 @@ def proxy_auth():
 @app.route("/api/logout", methods=['POST'])
 def proxy_logout():
     """
-    Выход - удаляет cookie на прокси
+    Выход - просто возвращаем успешный ответ
     """
-    response = make_response(jsonify({
+    return jsonify({
         "status": True,
         "message": "Выход выполнен успешно"
-    }))
-    
-    response = clear_auth_cookie(response)
-    
-    # Также делаем logout на основном сервере
-    forward_request(MAIN_SERVER_URL, '/api/logout', method='POST')
-    
-    return response
+    })
 
 
 @app.route("/api/aun", methods=['POST'])
