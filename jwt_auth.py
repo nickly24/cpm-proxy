@@ -70,11 +70,11 @@ def set_auth_cookie(response, token):
     """
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
-    # Используем SameSite=None + Secure=True для кросс-доменных cookie
+    # Всегда используем secure=false для единообразия между локальной и продакшен средой
     cookie_params = {
         'httponly': True,
-        'secure': True,
-        'samesite': 'None',  # Для кросс-доменных запросов
+        'secure': False,
+        'samesite': 'Lax',
         'max_age': JWT_EXPIRATION_HOURS * 3600
     }
     
@@ -91,11 +91,11 @@ def clear_auth_cookie(response):
     """
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
-    # Используем SameSite=None + Secure=True для кросс-доменных cookie
+    # Всегда используем secure=false для единообразия между локальной и продакшен средой
     cookie_params = {
         'httponly': True,
-        'secure': True,
-        'samesite': 'None',  # Для кросс-доменных запросов
+        'secure': False,
+        'samesite': 'Lax',
         'max_age': 0
     }
     

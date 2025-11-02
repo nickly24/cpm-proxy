@@ -136,9 +136,14 @@ def create_proxy_response(requests_response, preserve_cookies=False):
     flask_response = make_response(content)
     flask_response.status_code = requests_response.status_code
     
-    # Копируем заголовки (кроме cookie, если не нужно сохранять)
+    # Копируем заголовки (кроме cookie, CORS заголовков, encoding и length)
+    # Flask-CORS сам добавит нужные CORS заголовки
+    excluded_headers = ['set-cookie', 'content-encoding', 'content-length',
+                        'access-control-allow-origin', 'access-control-allow-methods',
+                        'access-control-allow-headers', 'access-control-allow-credentials',
+                        'access-control-expose-headers']
     for header, value in requests_response.headers.items():
-        if header.lower() not in ['set-cookie', 'content-encoding', 'content-length']:
+        if header.lower() not in excluded_headers:
             flask_response.headers[header] = value
     
     # Если нужно сохранить cookies из целевого сервера
