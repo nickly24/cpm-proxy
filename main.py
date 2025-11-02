@@ -164,9 +164,7 @@ def health_check():
     """
     return jsonify({
         "status": "ok",
-        "service": "CPM Proxy Server",
-        "main_server": MAIN_SERVER_URL,
-        "exam_server": EXAM_SERVER_URL
+        "service": "CPM Proxy Server"
     })
 
 
