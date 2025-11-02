@@ -88,21 +88,26 @@ def set_auth_cookie(response, token):
 def clear_auth_cookie(response):
     """
     Удаляет JWT токен из cookie
-    Использует те же параметры, что и set_auth_cookie
+    Пытается удалить cookie для всех возможных вариантов конфигурации
     """
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
     # Всегда используем secure=false для единообразия между локальной и продакшен средой
-    cookie_params = {
+    base_cookie_params = {
         'httponly': True,
         'secure': False,
         'samesite': 'Lax',
         'max_age': 0
     }
     
-    if cookie_domain:
-        cookie_params['domain'] = cookie_domain
+    # Удаляем cookie без domain (на случай, если она была установлена без domain)
+    response.set_cookie('auth_token', '', **base_cookie_params)
     
-    response.set_cookie('auth_token', '', **cookie_params)
+    # Если есть COOKIE_DOMAIN, также удаляем cookie с domain
+    if cookie_domain:
+        cookie_params_with_domain = base_cookie_params.copy()
+        cookie_params_with_domain['domain'] = cookie_domain
+        response.set_cookie('auth_token', '', **cookie_params_with_domain)
+    
     return response
 
