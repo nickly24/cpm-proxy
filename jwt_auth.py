@@ -88,6 +88,7 @@ def set_auth_cookie(response, token):
 def clear_auth_cookie(response):
     """
     Удаляет JWT токен из cookie
+    Использует те же параметры, что и set_auth_cookie
     """
     cookie_domain = os.environ.get('COOKIE_DOMAIN', None)
     
