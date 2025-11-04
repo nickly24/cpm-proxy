@@ -315,7 +315,44 @@ def proxy_main_server_direct(path=None, rest=None):
 # ============================================================================
 
 @app.route("/directions", methods=['GET'])
+def proxy_directions():
+    """
+    Получение направлений - не требует авторизации
+    """
+    response = forward_request(
+        EXAM_SERVER_URL,
+        '/directions',
+        method='GET',
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
 @app.route("/tests/<path:rest>", methods=['GET'])
+def proxy_tests(rest=None):
+    """
+    Получение тестов по направлению - требует авторизацию
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Перенаправляем запрос на экзам сервер
+    response = forward_request(
+        EXAM_SERVER_URL,
+        request.path,
+        method='GET',
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
 @app.route("/test/<path:rest>", methods=['GET', 'PUT', 'DELETE'])
 @app.route("/create-test", methods=['POST'])
 @app.route("/create-test-session", methods=['POST'])
@@ -345,6 +382,70 @@ def proxy_exam_server(rest=None):
         request_path,
         method=request.method,
         data=data,
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
+# ============================================================================
+# РОУТЫ ДЛЯ ВНЕШНИХ ТЕСТОВ (требуют авторизацию)
+# ============================================================================
+
+@app.route("/external-tests/direction/<direction_id>", methods=['GET'])
+def proxy_external_tests_by_direction(direction_id):
+    """
+    Получает внешние тесты по ID направления
+    Требует авторизацию
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Перенаправляем запрос на экзам сервер
+    response = forward_request(
+        EXAM_SERVER_URL,
+        f'/external-tests/direction/{direction_id}',
+        method='GET',
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
+@app.route("/external-tests/student/<student_id>/direction/<direction_id>", methods=['GET'])
+def proxy_external_tests_for_student(student_id, direction_id):
+    """
+    Получает внешние тесты направления с результатами конкретного студента
+    Требует авторизацию и проверку прав (студент может видеть только свои результаты)
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Проверяем права доступа: студент может видеть только свои результаты
+    user_id = user.get('id')
+    user_role = user.get('role')
+    
+    if user_role != 'admin' and str(user_id) != str(student_id):
+        return jsonify({
+            'status': False,
+            'error': 'Недостаточно прав доступа'
+        }), 403
+    
+    # Перенаправляем запрос на экзам сервер
+    response = forward_request(
+        EXAM_SERVER_URL,
+        f'/external-tests/student/{student_id}/direction/{direction_id}',
+        method='GET',
         cookies=request.cookies
     )
     
