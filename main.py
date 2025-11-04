@@ -453,6 +453,124 @@ def proxy_external_tests_for_student(student_id, direction_id):
 
 
 # ============================================================================
+# РОУТЫ ДЛЯ РАСЧЕТА РЕЙТИНГОВ (для админов и супервайзеров)
+# ============================================================================
+
+@app.route("/get-all-ratings", methods=['GET'])
+def proxy_get_all_ratings():
+    """
+    Получает все рейтинги из таблицы Allratings
+    Требует авторизацию и роль администратора или супервайзера
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Проверяем права доступа
+    user_role = user.get('role')
+    if user_role not in ['admin', 'supervisor']:
+        return jsonify({
+            'status': False,
+            'error': 'Недостаточно прав доступа. Требуется роль администратора или супервайзера'
+        }), 403
+    
+    # Перенаправляем запрос на экзам сервер
+    response = forward_request(
+        EXAM_SERVER_URL,
+        '/get-all-ratings',
+        method='GET',
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
+@app.route("/get-rating-details", methods=['POST'])
+def proxy_get_rating_details():
+    """
+    Получает детализацию рейтинга по ID записи из MongoDB
+    Требует авторизацию и роль администратора или супервайзера
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Проверяем права доступа
+    user_role = user.get('role')
+    if user_role not in ['admin', 'supervisor']:
+        return jsonify({
+            'status': False,
+            'error': 'Недостаточно прав доступа. Требуется роль администратора или супервайзера'
+        }), 403
+    
+    # Перенаправляем запрос на экзам сервер
+    data = None
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+        except:
+            pass
+    
+    response = forward_request(
+        EXAM_SERVER_URL,
+        '/get-rating-details',
+        method='POST',
+        data=data,
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
+@app.route("/calculate-all-ratings", methods=['POST'])
+def proxy_calculate_all_ratings():
+    """
+    Рассчитывает и сохраняет рейтинги для всех студентов
+    Требует авторизацию и роль администратора
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Проверяем права доступа: только админ
+    if user.get('role') != 'admin':
+        return jsonify({
+            'status': False,
+            'error': 'Недостаточно прав доступа. Требуется роль администратора'
+        }), 403
+    
+    # Перенаправляем запрос на экзам сервер
+    data = None
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+        except:
+            pass
+    
+    response = forward_request(
+        EXAM_SERVER_URL,
+        '/calculate-all-ratings',
+        method='POST',
+        data=data,
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
+# ============================================================================
 # ОБРАБОТКА ОШИБОК
 # ============================================================================
 
