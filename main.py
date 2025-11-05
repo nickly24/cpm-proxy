@@ -254,6 +254,46 @@ def proxy_aun():
 # ПРОКСИРОВАНИЕ ЗАПРОСОВ К ОСНОВНОМУ СЕРВЕРУ (cpm-serv)
 # ============================================================================
 
+@app.route("/api/add-attendance", methods=['POST'])
+def proxy_add_attendance():
+    """
+    Перенаправляет запрос на добавление посещаемости
+    Требует права администратора
+    """
+    # Проверяем авторизацию
+    user = get_current_user()
+    if not user:
+        return jsonify({
+            'status': False,
+            'error': 'Требуется авторизация'
+        }), 401
+    
+    # Проверяем роль - только админ
+    if user.get('role') != 'admin':
+        return jsonify({
+            'status': False,
+            'error': 'Недостаточно прав доступа. Требуется роль администратора.'
+        }), 403
+    
+    # Перенаправляем запрос на основной сервер
+    data = None
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+        except:
+            pass
+    
+    response = forward_request(
+        MAIN_SERVER_URL,
+        '/api/add-attendance',
+        method='POST',
+        data=data,
+        cookies=request.cookies
+    )
+    
+    return create_proxy_response(response)
+
+
 @app.route("/api/<path:path>", methods=['GET', 'POST', 'PUT', 'DELETE'])
 def proxy_main_server(path):
     """
@@ -578,7 +618,7 @@ def proxy_calculate_all_ratings():
 def proxy_get_ov_homework_table():
     """
     Получает таблицу данных по домашним заданиям типа ОВ
-    Требует авторизацию и роль администратора или супервайзера
+    Требует авторизацию и роль администратора, супервайзера или проктора
     """
     # Проверяем авторизацию
     user = get_current_user()
@@ -590,10 +630,10 @@ def proxy_get_ov_homework_table():
     
     # Проверяем права доступа
     user_role = user.get('role')
-    if user_role not in ['admin', 'supervisor']:
+    if user_role not in ['admin', 'supervisor', 'proctor']:
         return jsonify({
             'status': False,
-            'error': 'Недостаточно прав доступа. Требуется роль администратора или супервайзера'
+            'error': 'Недостаточно прав доступа. Требуется роль администратора, супервайзера или проктора'
         }), 403
     
     # Перенаправляем запрос на основной сервер
