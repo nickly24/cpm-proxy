@@ -16,7 +16,7 @@ CORS(app, resources={
     r"/*": {
         "origins": ALLOWED_ORIGINS,
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
         "supports_credentials": True,
         "expose_headers": ["Content-Type"]
     }
@@ -260,9 +260,21 @@ def proxy_add_attendance():
     Перенаправляет запрос на добавление посещаемости
     Требует права администратора
     """
+    # Отладочная информация
+    auth_header = request.headers.get('Authorization', '')
+    cookie_token = request.cookies.get('auth_token')
+    all_headers = dict(request.headers)
+    
     # Проверяем авторизацию
     user = get_current_user()
+    
+    # Если пользователь не найден, логируем для отладки
     if not user:
+        print(f"[DEBUG] add-attendance: No user found")
+        print(f"[DEBUG] Auth header present: {bool(auth_header)}, Cookie present: {bool(cookie_token)}")
+        print(f"[DEBUG] All headers: {list(all_headers.keys())}")
+        if auth_header:
+            print(f"[DEBUG] Auth header preview: {auth_header[:50]}...")
         return jsonify({
             'status': False,
             'error': 'Требуется авторизация'
@@ -270,6 +282,7 @@ def proxy_add_attendance():
     
     # Проверяем роль - только админ
     if user.get('role') != 'admin':
+        print(f"[DEBUG] add-attendance: User role is {user.get('role')}, required: admin")
         return jsonify({
             'status': False,
             'error': 'Недостаточно прав доступа. Требуется роль администратора.'
@@ -663,5 +676,5 @@ def internal_error(error):
 
 if __name__ == '__main__':
     from config import PROXY_PORT
-    app.run(host='0.0.0.0', port=PROXY_PORT, debug=True)
+    app.run(host='0.0.0.0', port=PROXY_PORT, debug=False, threaded=True)
 
