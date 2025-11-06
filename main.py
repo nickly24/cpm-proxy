@@ -5,9 +5,22 @@
 from flask import Flask, request, jsonify, make_response, Response
 from flask_cors import CORS
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from config import MAIN_SERVER_URL, EXAM_SERVER_URL, ALLOWED_ORIGINS
 from jwt_auth import generate_token, set_auth_cookie, clear_auth_cookie, get_current_user, verify_token, get_token_from_request
 import os
+import logging
+import time
+from datetime import datetime
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -25,10 +38,96 @@ CORS(app, resources={
 # Таймаут для запросов к серверам (в секундах)
 REQUEST_TIMEOUT = 30
 
+# Логирование всех запросов
+@app.before_request
+def log_request_info():
+    """Логирует информацию о входящем запросе"""
+    start_time = time.time()
+    request.start_time = start_time
+    
+    # Получаем IP клиента
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+    
+    # Логируем запрос
+    logger.info(f"[REQUEST] {request.method} {request.path} | IP: {client_ip} | Query: {dict(request.args)}")
+    
+    # Логируем тело запроса для POST/PUT (первые 500 символов)
+    if request.method in ['POST', 'PUT'] and request.is_json:
+        try:
+            body = request.get_json()
+            body_str = str(body)[:500]
+            logger.info(f"[REQUEST BODY] {body_str}")
+        except:
+            pass
+
+@app.after_request
+def log_response_info(response):
+    """Логирует информацию об ответе"""
+    # Вычисляем время выполнения
+    if hasattr(request, 'start_time'):
+        duration = (time.time() - request.start_time) * 1000  # в миллисекундах
+    else:
+        duration = 0
+    
+    # Логируем ответ
+    logger.info(f"[RESPONSE] {request.method} {request.path} | Status: {response.status_code} | Duration: {duration:.2f}ms")
+    
+    return response
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Логирует все исключения"""
+    logger.error(f"[ERROR] {request.method} {request.path} | Exception: {str(e)}", exc_info=True)
+    return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+# Создаем сессии с connection pooling для каждого backend сервера
+# Это позволяет переиспользовать HTTP соединения
+_main_server_session = None
+_exam_server_session = None
+
+def get_main_server_session():
+    """Получает или создает сессию для основного сервера с connection pooling"""
+    global _main_server_session
+    if _main_server_session is None:
+        _main_server_session = requests.Session()
+        # Настраиваем connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=10,  # Количество пулов соединений
+            pool_maxsize=50,      # Максимум соединений в пуле
+            max_retries=Retry(
+                total=2,
+                backoff_factor=0.3,
+                status_forcelist=[500, 502, 503, 504]
+            )
+        )
+        _main_server_session.mount('http://', adapter)
+        _main_server_session.mount('https://', adapter)
+    return _main_server_session
+
+def get_exam_server_session():
+    """Получает или создает сессию для экзам сервера с connection pooling"""
+    global _exam_server_session
+    if _exam_server_session is None:
+        _exam_server_session = requests.Session()
+        # Настраиваем connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=10,  # Количество пулов соединений
+            pool_maxsize=50,      # Максимум соединений в пуле
+            max_retries=Retry(
+                total=2,
+                backoff_factor=0.3,
+                status_forcelist=[500, 502, 503, 504]
+            )
+        )
+        _exam_server_session.mount('http://', adapter)
+        _exam_server_session.mount('https://', adapter)
+    return _exam_server_session
+
 
 def forward_request(target_url, path, method='GET', data=None, cookies=None, headers=None):
     """
     Перенаправляет запрос на целевой сервер
+    Использует connection pooling для переиспользования HTTP соединений
     
     Args:
         target_url: Базовый URL целевого сервера
@@ -42,6 +141,15 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
         Response объект от целевого сервера
     """
     url = f"{target_url.rstrip('/')}/{path.lstrip('/')}"
+    
+    # Определяем, какую сессию использовать (для connection pooling)
+    if MAIN_SERVER_URL in target_url:
+        session = get_main_server_session()
+    elif EXAM_SERVER_URL in target_url:
+        session = get_exam_server_session()
+    else:
+        # Fallback на обычный requests, если URL не распознан
+        session = requests
     
     # Подготавливаем headers
     request_headers = {
@@ -65,9 +173,9 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
             request_cookies['auth_token'] = auth_token
     
     try:
-        # Делаем запрос
+        # Делаем запрос через сессию (с connection pooling)
         if method == 'GET':
-            response = requests.get(
+            response = session.get(
                 url,
                 params=request.args,
                 cookies=request_cookies,
@@ -76,7 +184,7 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
                 allow_redirects=False
             )
         elif method == 'POST':
-            response = requests.post(
+            response = session.post(
                 url,
                 json=data,
                 params=request.args,
@@ -86,7 +194,7 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
                 allow_redirects=False
             )
         elif method == 'PUT':
-            response = requests.put(
+            response = session.put(
                 url,
                 json=data,
                 params=request.args,
@@ -96,7 +204,7 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
                 allow_redirects=False
             )
         elif method == 'DELETE':
-            response = requests.delete(
+            response = session.delete(
                 url,
                 params=request.args,
                 cookies=request_cookies,
@@ -107,14 +215,19 @@ def forward_request(target_url, path, method='GET', data=None, cookies=None, hea
         else:
             return None, 405
         
+        # Логируем успешный запрос к backend
+        logger.info(f"[PROXY] {method} {url} | Backend Status: {response.status_code}")
+        
         return response
         
     except requests.exceptions.Timeout:
+        logger.error(f"[PROXY ERROR] Timeout при запросе к {url}")
         return None, 504
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
+        logger.error(f"[PROXY ERROR] Connection error при запросе к {url}: {str(e)}")
         return None, 503
     except Exception as e:
-        print(f"Ошибка при перенаправлении запроса: {str(e)}")
+        logger.error(f"[PROXY ERROR] Ошибка при перенаправлении запроса к {url}: {str(e)}", exc_info=True)
         return None, 500
 
 
@@ -270,11 +383,11 @@ def proxy_add_attendance():
     
     # Если пользователь не найден, логируем для отладки
     if not user:
-        print(f"[DEBUG] add-attendance: No user found")
-        print(f"[DEBUG] Auth header present: {bool(auth_header)}, Cookie present: {bool(cookie_token)}")
-        print(f"[DEBUG] All headers: {list(all_headers.keys())}")
+        logger.debug(f"[DEBUG] add-attendance: No user found")
+        logger.debug(f"[DEBUG] Auth header present: {bool(auth_header)}, Cookie present: {bool(cookie_token)}")
+        logger.debug(f"[DEBUG] All headers: {list(all_headers.keys())}")
         if auth_header:
-            print(f"[DEBUG] Auth header preview: {auth_header[:50]}...")
+            logger.debug(f"[DEBUG] Auth header preview: {auth_header[:50]}...")
         return jsonify({
             'status': False,
             'error': 'Требуется авторизация'
@@ -282,7 +395,7 @@ def proxy_add_attendance():
     
     # Проверяем роль - только админ
     if user.get('role') != 'admin':
-        print(f"[DEBUG] add-attendance: User role is {user.get('role')}, required: admin")
+        logger.debug(f"[DEBUG] add-attendance: User role is {user.get('role')}, required: admin")
         return jsonify({
             'status': False,
             'error': 'Недостаточно прав доступа. Требуется роль администратора.'
