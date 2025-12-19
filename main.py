@@ -7,7 +7,7 @@ from flask_cors import CORS
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from config import MAIN_SERVER_URL, EXAM_SERVER_URL, ALLOWED_ORIGINS
+from config import MAIN_SERVER_URL, EXAM_SERVER_URL
 from jwt_auth import generate_token, set_auth_cookie, clear_auth_cookie, get_current_user, verify_token, get_token_from_request
 import os
 import logging
@@ -24,13 +24,13 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# CORS настройки
+# CORS настройки - разрешаем все источники
 CORS(app, resources={
     r"/*": {
-        "origins": ALLOWED_ORIGINS,
+        "origins": "*",
         "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-        "supports_credentials": True,
+        "supports_credentials": False,  # Нельзя использовать credentials с origins="*"
         "expose_headers": ["Content-Type"]
     }
 })
