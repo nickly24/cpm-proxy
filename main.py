@@ -25,18 +25,23 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # CORS настройки - разрешаем все источники
-CORS(app, resources={
-    r"/*": {
-        "origins": "*",
-        "methods": ["GET", "POST", "OPTIONS", "PUT", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-        "supports_credentials": False,  # Нельзя использовать credentials с origins="*"
-        "expose_headers": ["Content-Type"]
-    }
-})
+CORS(app, 
+     resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "allow_headers": "*"}},
+     supports_credentials=False)
 
 # Таймаут для запросов к серверам (в секундах)
 REQUEST_TIMEOUT = 30
+
+# Обработка OPTIONS запросов (preflight)
+@app.before_request
+def handle_preflight():
+    """Обрабатывает preflight OPTIONS запросы для CORS"""
+    if request.method == "OPTIONS":
+        response = make_response()
+        response.headers.add("Access-Control-Allow-Origin", "*")
+        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+        response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        return response
 
 # Логирование всех запросов
 @app.before_request
@@ -62,12 +67,17 @@ def log_request_info():
 
 @app.after_request
 def log_response_info(response):
-    """Логирует информацию об ответе"""
+    """Логирует информацию об ответе и добавляет CORS заголовки"""
     # Вычисляем время выполнения
     if hasattr(request, 'start_time'):
         duration = (time.time() - request.start_time) * 1000  # в миллисекундах
     else:
         duration = 0
+    
+    # Явно добавляем CORS заголовки на случай, если flask-cors не сработал
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
     
     # Логируем ответ
     logger.info(f"[RESPONSE] {request.method} {request.path} | Status: {response.status_code} | Duration: {duration:.2f}ms")
