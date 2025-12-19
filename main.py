@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# CORS настройки - разрешаем все источники
+# CORS настройки - разрешаем все источники с поддержкой credentials
 CORS(app, 
      resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"], "allow_headers": "*"}},
-     supports_credentials=False)
+     supports_credentials=True)
 
 # Таймаут для запросов к серверам (в секундах)
 REQUEST_TIMEOUT = 30
@@ -38,9 +38,12 @@ def handle_preflight():
     """Обрабатывает preflight OPTIONS запросы для CORS"""
     if request.method == "OPTIONS":
         response = make_response()
-        response.headers.add("Access-Control-Allow-Origin", "*")
+        # Возвращаем конкретный origin вместо "*" для поддержки credentials
+        origin = request.headers.get('Origin', '*')
+        response.headers.add("Access-Control-Allow-Origin", origin)
         response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
         response.headers.add("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        response.headers.add("Access-Control-Allow-Credentials", "true")
         return response
 
 # Логирование всех запросов
@@ -75,9 +78,12 @@ def log_response_info(response):
         duration = 0
     
     # Явно добавляем CORS заголовки на случай, если flask-cors не сработал
-    response.headers['Access-Control-Allow-Origin'] = '*'
+    # Возвращаем конкретный origin вместо "*" для поддержки credentials
+    origin = request.headers.get('Origin', '*')
+    response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Requested-With'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
     
     # Логируем ответ
     logger.info(f"[RESPONSE] {request.method} {request.path} | Status: {response.status_code} | Duration: {duration:.2f}ms")
